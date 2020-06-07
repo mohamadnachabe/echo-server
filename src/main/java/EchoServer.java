@@ -14,6 +14,40 @@ public class EchoServer {
         CountDownLatch serverStarted = new CountDownLatch(1);
         CountDownLatch serverExited = new CountDownLatch(1);
 
+        startServer(serverStarted, serverExited);
+
+        serverStarted.await();
+
+        runClients();
+
+        serverExited.await();
+
+    }
+
+    private static void runClients() {
+        int clientNumber = 1;
+        ExecutorService clientPool = Executors.newFixedThreadPool(clientNumber);
+
+        clientPool.submit(() -> {
+            try(
+                    Socket socket = new Socket("127.0.0.1", 23333);
+                    PrintWriter out =
+                            new PrintWriter(socket.getOutputStream(), true);
+                    BufferedReader in = new BufferedReader(
+                            new InputStreamReader(socket.getInputStream()));
+            ) {
+                out.write("Hello World\n");
+                out.flush();
+                out.write("exit");
+                out.flush();
+                System.out.println(in.readLine());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    private static void startServer(CountDownLatch serverStarted, CountDownLatch serverExited) {
         ExecutorService serverExecutor = Executors.newFixedThreadPool(1);
         serverExecutor.submit(() -> {
 
@@ -29,13 +63,13 @@ public class EchoServer {
                 serverStarted.countDown();
                 System.out.println("LISTENING");
 
-                while(true) {
+                while(serverExited.getCount() != 0) {
                     try {
                         Socket clientSocket = serverSocket.accept();
                         System.out.println("CONNECTED");
 
                         SocketRunnable socketRunnable = new SocketRunnable(clientSocket);
-                        Future<?> task = connectionPool.submit(socketRunnable);
+                        connectionPool.submit(socketRunnable);
 
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -46,32 +80,6 @@ public class EchoServer {
             }
 
         });
-
-        serverStarted.await();
-
-//        int clientNumber = 1;
-//        ExecutorService clientPool = Executors.newFixedThreadPool(clientNumber);
-//
-//        clientPool.submit(() -> {
-//            try(
-//                    Socket socket = new Socket("127.0.0.1", 23333);
-//                    PrintWriter out =
-//                            new PrintWriter(socket.getOutputStream(), true);
-//                    BufferedReader in = new BufferedReader(
-//                            new InputStreamReader(socket.getInputStream()));
-//            ) {
-//                out.write("Hello World\n");
-//                out.flush();
-//                out.write("exit");
-//                out.flush();
-//                System.out.println(in.readLine());
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//            }
-//        });
-
-        serverExited.await();
-
     }
 
     static class SocketRunnable implements Runnable {
